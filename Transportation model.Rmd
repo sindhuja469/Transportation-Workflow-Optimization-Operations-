@@ -1,0 +1,448 @@
+---
+title: "transportation model"
+author: "sindhuja manda"
+date: "2025-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NA)
+```
+
+
+```{r}
+library(knitr)
+library(lpSolve)
+```
+
+The Transportation model 
+problem statement: 
+
+```{r}
+# Create the main data frame
+table_data <- data.frame(
+  Dest1 = c(5, 3, 6, 3, 80),
+  Dest2 = c(6, 5, 2, 4, 90),
+  Dest3 = c(12, 10, 6, 10, 70),
+  ProductionCost = c(300, 200, 250, 150, NA),
+  ProductionCapacity = c(100, 75, 85, 40, NA)
+)
+
+# Assign row names for sources and demand
+rownames(table_data) <- c("Plant1", "Plant2", "Plant3", "Plant4", "MonthlyDemand")
+
+# View the final table
+table_data
+
+```
+
+UNBALANCED: 
+
+since the total supply (100 + 75 + 85 + 40 = 300) exceeds total demand (80 + 90 + 70 = 240) by 60 units, we add a dummy destination (a sink) Dest 4 with:
+
+Zero shipping cost from all plants (because it's a dummy)
+
+Demand = 60
+
+```{r}
+# Add Dummy Destination (Dest4)
+table_data$Dest4 <- c(0, 0, 0, 0, 60)  # zero cost for all plants, demand = 60
+
+# Reorder columns to keep a clean layout
+table_data <- table_data[, c("Dest1", "Dest2", "Dest3", "Dest4", "ProductionCost", "ProductionCapacity")]
+
+# View final table
+table_data
+```
+
+this balances the problem be total demand = 80+90+70+60(dummy) = 300 = total supply.
+
+
+## Q1: FORMULATION OF TRANSPORTATION MODEL
+
+
+A) Decision variables
+
+Let
+i = 1,2,3,4 index the plants (Plant1..Plant4)
+
+j = 1,2,3,4 index the destinations (Dest1..Dest3 and Dummy Dest4)
+
+$x_ij$ ; units shipped from plant i to destination j
+
+
+
+Shipping cost from plant i to destination j = $S_ij$
+
+production cost per unit at plant i = $P_i$
+
+then, combined production cost $C_ij$ = $S_ij$ + $P_i$
+
+
+
+B) Objective Function: 
+
+minimizing total cost
+
+Min TC = $305x_11$ + $306x_12$ + $312x_13$  
+         + $203x_21$ + $205x_22$ + $210x_23$ 
+         + $256x_31$ + $252x_32$ + $256x_33$ 
+         + $153x_41$ + $154x_42$ + $160x_43$ 
+         
+
+C) Constraints 
+
+1. supply constraints: 
+
+plant 1: $x_11 + x_12 + x_13 + x_14 \le 100$
+
+plant 2: $x_21 + x_22 + x_23 + x_24 \le 75$
+
+plant 3: $x_31 + x_32 + x_33 + x_34 \le 85$
+
+plant 4: $x_41 + x_42 + x_43 + x_44 \le 40$
+
+2.Demand constraints: 
+
+each destination has specific demand that needs to be fulfilled(including dummy destination demand)
+
+$x_11 + x_21 + x_31 + x_41 \ge 80$
+
+$x_12 + x_22 + x_32 + x_42 \ge 90$
+
+$x_13 + x_23 + x_33 + x_43 \ge 70$
+
+$x_14 + x_24 + x_34 + x_44 \ge 60$   (dummy)
+
+Non-Negativity: 
+
+All decisions must be non-negative since negative shipments are not possible.
+
+$x_ij \ge 0$
+
+Summary model: 
+
+Min TC = $305x_11$ + $306x_12$ + $312x_13$ + $300x_14$ 
+         + $203x_21$ + $205x_22$ + $210x_23$ + $200x_24$ 
+         + $256x_31$ + $252x_32$ + $256x_33$ + $250x_34$
+         + $153x_41$ + $154x_42$ + $160x_43$ + $150x_44$ 
+         
+subject to: 
+
+supply constraints 
+
+$x_11 + x_12 + x_13 + x_14 \le 100$
+
+$x_21 + x_22 + x_23 + x_24 \le 75$
+
+$x_31 + x_32 + x_33 + x_34 \le 85$
+
+$x_41 + x_42 + x_43 + x_44 \le 40$
+
+demand constraints 
+
+$x_11 + x_21 + x_31 + x_41 \ge 80$
+
+$x_12 + x_22 + x_32 + x_42 \ge 90$
+
+$x_13 + x_23 + x_33 + x_43 \ge 70$
+
+$x_14 + x_24 + x_34 + x_44 \ge 60$  
+
+non-negativity: $x_ij \ge 0$
+
+
+## Q2. SOLUTION IN R MARKDOWN 
+
+```{r}
+library(lpSolve)
+```
+
+setting objective function: 
+```{r}
+tc <- matrix(c(305, 306, 312, 0,
+             203, 205, 210, 0,
+             256, 252, 256, 0,
+             153, 154, 160, 0), nrow = 4, byrow = TRUE)
+```
+
+setting constraints and RHS (supply side) 
+```{r}
+row.signs <- rep("<=", 4)
+row.rhs <- c(100, 75, 85, 40)
+```
+
+setting constraints and RHS (demand side)
+```{r}
+col.signs <- rep(">=", 4)
+col.rhs <- c(80, 90, 70, 60)
+```
+
+
+```{r}
+# run the model 
+
+lptrans <- lp.transport(tc, "min", row.signs, row.rhs, col.signs, col.rhs)
+
+print(lptrans)
+```
+
+```{r}
+# getting the values of 16 decision variables: 
+
+lptrans$solution
+```
+```{r}
+#Getting the value of the minimized cost 
+
+lptrans$objval
+```
+when solved the transportation problem, the minimized value of transportation cost is: 55320
+
+
+## Q3: DUAL FORMULATION 
+
+A) Variables: 
+
+let $u_i$ be the per unit cost at each plant i (1,2,..4) and $v_j$ be the demand at each destination j (1,2,..,4).
+
+$c_ij$ - total combined cost of production including transportation for each unit at each destination j, for each demand. 
+
+
+B) Objective function: 
+
+the RHS of constraints of primal will be the co efficeints in dual. 
+
+objective function is to maximize VA(value addition):
+
+$Max VA = Revenue - cost$
+
+Max Z = $80v_1 + 90v_2 + 70v_3 + 60v_4 - 100u_1 - 75u_2 - 85u_3 - 40u_4$ 
+
+C) Constraints : 
+
+$v_j - u_i \ge c_ij$  
+
+
+plant 1 supplies to 4 possible destinations: 
+
+eg. $v_1 - u_1 \ge c_11$ = 5 i.e $v_1\ge 5+300$, $u_1$ = 300   
+
+
+$v_1 - u_1 \ge 305$ 
+
+$v_2 - u_1 \ge 306$
+
+$v_3 - u_1 \ge 312$
+
+
+plant 2 supplies to 4 possible destinations:
+
+$v_1 - u_2 \ge 203$
+
+$v_2 - u_2 \ge 205$
+
+$v_3 - u_2 \ge 210$
+
+
+plant 3 supplies to 4 possible destinations:
+
+$v_1 - u_3 \ge 256$
+
+$v_2 - u_3 \ge 252$
+
+$v_3 - u_3 \ge 256$
+
+
+plant 4 supplies to 4 possible destinations:
+
+$v_1 - u_4 \ge 153$
+
+$v_2 - u_4 \ge 154$
+
+$v_3 - u_4 \ge 160$
+
+
+Non-Negativity 
+
+$v_j \ge 0$ 
+
+$u_i \ge 0$  
+
+for j = 1,2,3,4 and i = 1,2,3. 
+
+
+
+## Q4. ECONOMIC INTERPRETATION OF THE DUAL
+
+1. Marginal cost and Marginal revenue 
+
+$u_i$ → reflects MC(marginal cost): the cost of producing and supplying one more unit from plant i.
+
+$v_i$ → reflects MR(marginal revenue): the benefit or price a destination j is willing to pay for receiving one more unit.
+
+At equilibrium (optimal solution), for all active shipping routes (where $x_ij \gt 0$
+
+in our constraint $v_j - u_i \ge c_ij$ 
+
+which is $v_i \ge u_i +c_ij$
+
+then, $v_1 \ge u_1 + 300$
+
+plant 1 can keep on increasing production and shipping to destination 1 as long as  $v_1 \ge u_1 + 300$, which is $MR \GE MC$. ON the other hand, plant 1 reduces production and shipping if $v_1 \le u_1 + 300$ i.e., $MC \GE MR$, thats when production should stop. when MR = MC, thats the optimal point to stop producing. this is equilibrium for profit maximization. 
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+quantities <- seq(0, 240, by = 1)
+```
+
+define MR(demand) and MC(supply) functions
+```{r}
+MR <- function(quantity) {
+# Marginal Revenue (MR) or Demand Curve
+150 - 1 * quantity # Decreasing as quantity increases
+}
+MC <- function(quantity) {
+# Marginal Cost (MC) or Supply Curve
+0.5 * quantity # Increasing as quantity increases
+}
+```
+
+```{r}
+# create data frame with quantity, MR and MC
+data <- data.frame(
+  quantity = quantities,
+  MR = MR(quantities),
+  MC = MC(quantities)
+)
+```
+
+```{r}
+# Example data
+data <- data.frame(
+  Quantity = seq(0, 200, by = 10),
+  MR = 200 - 1 * seq(0, 200, by = 10),  # Downward-sloping MR curve
+  MC = 50 + 1.5 * seq(0, 200, by = 10)  # Upward-sloping MC curve
+)
+```
+
+Plot MR (Demand) and MC (Supply) curves with Price on y-axis and Quantity on x-axis
+```{r}
+# Plot MR and MC curves
+library(ggplot2)
+
+ggplot(data, aes(x = Quantity)) +
+  geom_line(aes(y = MR, color = "MR (Marginal Revenue)"), size = 1) +     # MR curve
+  geom_line(aes(y = MC, color = "MC (Marginal Cost)"), size = 1) +        # MC curve
+  labs(
+    title = "MR and MC Curves (Demand and Supply) with Intersection at Quantity ≈ 100",
+    x = "Quantity",
+    y = "Price"
+  ) +
+  scale_color_manual(
+    values = c("MR (Marginal Revenue)" = "blue", "MC (Marginal Cost)" = "red")
+  ) +
+  theme_minimal() +
+  theme(legend.title = element_blank())   # Remove legend title
+```
+
+
+Conditions for shipping, non shipping: 
+
+1. Shipping occurs only when it is profitable in the equilibrium sense: $v_j - u_i \ge c_ij$ 
+
+That is, the value of sending one more unit (destination’s valuation) exactly matches the cost (plant’s opportunity cost + transport) or creates profit.
+
+2. shipping does not occur, If a route is not used in the optimal plan ($x_ij = 0$)
+
+$v_j - u_i \lt c_ij$ 
+
+The effective value of sending goods via that route is less than the cost so it’s not profitable to ship along that path.
+
+3. ship, it carries flow, exactly break even point: 
+
+$v_j - u_i = c_ij$
+
+
+
+
+Arbitrage(hiring) and No Arbitrage(no hiring shipping company): 
+
+if  $v_j - u_i \ge c_ij$ Arbitrage exists here, one could profit by directly shipping or hiring a shipping company until $v_j - u_i \le c_ij$ . 
+there's no no upper bound and infinite production and supply.
+
+However, in equilibrium:
+
+The LP ensures no such route can exist (violates optimality).
+
+If it did, the solution would reallocate shipments until the profit gap closes, restoring
+
+   $v_j - u_i = c_ij$ 
+
+Thus, no arbitrage can persist in an optimal transportation plan, the market self-adjusts to equilibrium.
+
+
+
+
+## solving dual in r
+```{r}
+library(lpSolve)
+
+costs <- matrix(c(305, 306, 312,
+                203, 205, 210,
+                256, 252, 256,
+                153,154, 160), 
+                nrow = 4, byrow = TRUE)
+supply <- c(80,90,70,60)
+demand <- c(100,75,85,40) 
+
+m <- length(supply)
+n <- length(demand)
+
+#dual objective co efficients 
+#order: u1..u2..
+obj <- c(supply, demand)
+```
+
+```{r}
+#Constraints: u_i + v_j <= c_ij
+A <- matrix(0, nrow = m*n, ncol = m+n)
+row <- 1
+for (i in 1:m) {
+for (j in 1:n) {
+A[row, i] <- 1 # u_i
+A[row, m+j] <- 1 # v_j
+row <- row + 1
+}
+}
+dir <- rep("<=", m*n)
+b <- as.vector(t(costs)) # costs row-wise
+# Solve dual
+dual <- lp(direction = "max",
+objective.in = obj,
+const.mat = A, const.dir = dir, const.rhs = b)
+
+```
+
+```{r}
+#results 
+dual$status
+```
+
+```{r}
+dual$solution
+```
+```{r}
+dual$objval
+```
+
+
+
+
+
+
+
+
