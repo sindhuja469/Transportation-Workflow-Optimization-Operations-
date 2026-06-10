@@ -1,5 +1,5 @@
-# Optimization-model
-# Transportation Optimization & Routing Model
+
+# Transportation & Workflow Optimization Model
 
 ## Overview
 This project implements a **Transportation Optimization Model** using **Linear Programming** to minimize total production and shipping costs while satisfying supply, demand, and capacity constraints. The model reflects a real-world logistics planning scenario involving multiple plants, destinations, and route costs.
